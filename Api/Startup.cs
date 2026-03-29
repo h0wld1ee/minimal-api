@@ -1,14 +1,15 @@
-using System.ComponentModel.DataAnnotations;
-using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using MinimalApi;
 using MinimalApi.Dominio.Entidades;
 using MinimalApi.Dominio.Enuns;
 using MinimalApi.Dominio.Interfaces;
@@ -16,20 +17,25 @@ using MinimalApi.Dominio.ModelViews;
 using MinimalApi.Dominio.Servicos;
 using MinimalApi.DTOs;
 using MinimalApi.Infraestrutura.Db;
-using Microsoft.OpenApi.Models;
-using Microsoft.OpenApi;
-using Microsoft.AspNetCore.Authorization;
 
 
+public class Startup
+{
+    public Startup(IConfiguration configuration)
+    {
 
-#region Builder
+        Configuration = configuration;
+        key = Configuration?.GetSection("Jwt")?.ToString() ?? "";
+        
+    }
 
-var builder = WebApplication.CreateBuilder(args);
+    private string key = "";
 
-        var key = builder.Configuration.GetSection("Jwt").ToString();
-        if (string.IsNullOrEmpty(key)) key = "123456";
+public IConfiguration Configuration{ get; set; } = default!;
 
-        builder.Services.AddAuthentication(option =>
+    public void ConfigureServices(IServiceCollection services)
+    {
+              services.AddAuthentication(option =>
         {
             option.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             option.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -45,13 +51,13 @@ var builder = WebApplication.CreateBuilder(args);
            };
 });
 
-       builder.Services.AddAuthorization();
+       services.AddAuthorization();
 
-       builder.Services.AddScoped<IAdministradorServico, AdministradorServico>();
-       builder.Services.AddScoped<IVeiculoServico, VeiculoServico>();
+       services.AddScoped<IAdministradorServico, AdministradorServico>();
+       services.AddScoped<IVeiculoServico, VeiculoServico>();
 
-       builder.Services.AddEndpointsApiExplorer();
-       builder.Services.AddSwaggerGen(options =>
+       services.AddEndpointsApiExplorer();
+       services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -82,20 +88,42 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 
-        builder.Services.AddDbContext<DbContexto>(options =>
+        services.AddDbContext<DbContexto>(options =>
         {
             options.UseMySql(
-                builder.Configuration.GetConnectionString("MySql"),
-                ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("MySql"))
+                Configuration.GetConnectionString("MySql"),
+                ServerVersion.AutoDetect(Configuration.GetConnectionString("MySql"))
             );
         });
 
+         services.AddCors(options =>
+        {
+            options.AddDefaultPolicy(
+                builder =>
+                {
+                    builder.AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader();
+                });
+        });
+    }
 
-        var app = builder.Build();
-#endregion
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
 
-#region Home
-        app.MapGet("/", () => Results.Json(new Home())).AllowAnonymous().WithTags("Home");
+        app.UseRouting();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.UseCors();
+
+        app.UseEndpoints(endpoints => {
+
+            #region Home
+        endpoints.MapGet("/", () => Results.Json(new Home())).AllowAnonymous().WithTags("Home");
         #endregion
 
 #region Administradores
@@ -124,7 +152,7 @@ var builder = WebApplication.CreateBuilder(args);
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        app.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) =>
+        endpoints.MapPost("/administradores/login", ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) =>
         {
             var adm = administradorServico.Login(loginDTO);
             if (adm != null)
@@ -142,7 +170,7 @@ var builder = WebApplication.CreateBuilder(args);
         }).AllowAnonymous().WithTags("Administradores");
 
 
-        app.MapGet("/administradores", ([FromQuery] int? pagina, IAdministradorServico administradorServico) =>
+        endpoints.MapGet("/administradores", ([FromQuery] int? pagina, IAdministradorServico administradorServico) =>
         {
             var adms = new List<AdministradorModelView>();
             var administradores = administradorServico.Todos(pagina);
@@ -161,7 +189,7 @@ var builder = WebApplication.CreateBuilder(args);
         .RequireAuthorization(new AuthorizeAttribute{ Roles = "Adm" })
         .WithTags("Administradores");
 
-        app.MapGet("/Adminstradores/{id}", (IAdministradorServico administradorServico, int id) =>
+        endpoints.MapGet("/Adminstradores/{id}", (IAdministradorServico administradorServico, int id) =>
         {
             var administrador = administradorServico.BuscaPorId(id);
             if (administrador == null) return Results.NotFound();
@@ -176,7 +204,7 @@ var builder = WebApplication.CreateBuilder(args);
         .RequireAuthorization(new AuthorizeAttribute{ Roles = "Adm" })
         .WithTags("Administradores");
 
-        app.MapPost("/administradores", ([FromBody] AdministradorDTO administradorDTO, IAdministradorServico administradorServico) =>
+        endpoints.MapPost("/administradores", ([FromBody] AdministradorDTO administradorDTO, IAdministradorServico administradorServico) =>
         {
             var validacao = new ErrosDeValidacao
             {
@@ -239,7 +267,7 @@ var builder = WebApplication.CreateBuilder(args);
         }
 
 
-        app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) =>
+        endpoints.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) =>
         {
             var validacao = validaDTO(veiculoDTO);
             if (validacao.Mensagens.Count > 0)
@@ -261,14 +289,14 @@ var builder = WebApplication.CreateBuilder(args);
         .RequireAuthorization(new AuthorizeAttribute{ Roles = "Adm, Editor" })
         .WithTags("Veiculo");
 
-        app.MapGet("/veiculos", (IVeiculoServico veiculoServico, int pagina = 1) =>
+        endpoints.MapGet("/veiculos", (IVeiculoServico veiculoServico, int pagina = 1) =>
          {
              var veiculos = veiculoServico.Todos(pagina);
              return Results.Ok(veiculos);
 
          }).RequireAuthorization().WithTags("Veiculo");
 
-        app.MapGet("/veiculos/{id}", (IVeiculoServico veiculoServico, int id) =>
+        endpoints.MapGet("/veiculos/{id}", (IVeiculoServico veiculoServico, int id) =>
         {
             var veiculo = veiculoServico.BuscaPorId(id);
             if (veiculo == null) return Results.NotFound();
@@ -280,7 +308,7 @@ var builder = WebApplication.CreateBuilder(args);
         .RequireAuthorization(new AuthorizeAttribute{ Roles = "Adm, Editor" })
         .WithTags("Veiculo");
 
-        app.MapPut("/veiculos/{id}", (IVeiculoServico veiculoServico, VeiculoDTO veiculoDTO, int id) =>
+        endpoints.MapPut("/veiculos/{id}", (IVeiculoServico veiculoServico, VeiculoDTO veiculoDTO, int id) =>
         {
             var veiculo = veiculoServico.BuscaPorId(id);
             if (veiculo == null)
@@ -301,7 +329,7 @@ var builder = WebApplication.CreateBuilder(args);
           .RequireAuthorization(new AuthorizeAttribute{ Roles = "Adm" })
           .WithTags("Veiculo");
 
-        app.MapDelete("/veiculos/{id}", (IVeiculoServico veiculoServico, int id) =>
+        endpoints.MapDelete("/veiculos/{id}", (IVeiculoServico veiculoServico, int id) =>
         {
             var veiculo = veiculoServico.BuscaPorId(id);
             if (veiculo == null)
@@ -316,17 +344,9 @@ var builder = WebApplication.CreateBuilder(args);
         .WithTags("Veiculo");
         #endregion
 
-#region App
-        app.UseSwagger();
-        app.UseSwaggerUI();
+            
+        });
 
-        app.UseAuthentication();
-        app.UseAuthorization();
+    }
 
-
-        app.Run();
-    
-
-
-        #endregion
-
+}

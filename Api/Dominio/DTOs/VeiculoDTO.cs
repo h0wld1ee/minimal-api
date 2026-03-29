@@ -8,6 +8,6 @@ public record VeiculoDTO
     
     public string Marca {get; set;} = default!;
    
-    public int Ano{get; set;} 
+    public int Ano{get; set;} = default!;
 
 }

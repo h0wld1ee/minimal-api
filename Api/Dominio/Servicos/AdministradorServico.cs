@@ -48,9 +48,9 @@ public class AdministradorServico : IAdministradorServico
       return query.ToList();
     }
 
-    public List<Administrador> Todos(int id)
-    {
-        throw new NotImplementedException();
-    }
+   public List<Administrador> Todos(int id)
+{
+    return _contexto.Administradores.ToList();
+}
 }
 

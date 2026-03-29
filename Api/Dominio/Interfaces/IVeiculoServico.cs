@@ -9,7 +9,7 @@ public interface IVeiculoServico
 {
      List<Veiculo> Todos(int? pagina= 1, string? nome= null, string? marca= null);
 
-     Veiculo? BuscaPorId(int id);
+     Veiculo? BuscaPorId(int Id);
 
      void Incluir(Veiculo veiculo);
 
