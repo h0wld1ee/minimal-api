@@ -19,11 +19,4 @@ API com sistema de login e autenticação JWT, contendo dois perfis:
 
 - Cadastro e Login de administradores
 - Geração de Token JWT
-- CRUD de Veículos (com controle de acesso por perfil)
-
-## Como Rodar
-
-```bash
-git clone https://github.com/h0wld1ee/minimal-api.git
-cd minimal-api
-dotnet run
+- CRUD de Veículos (Listar, Buscar, Cadastrar, Atualizar e Deletar) com restrição por perfil
